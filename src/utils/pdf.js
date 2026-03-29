@@ -4,16 +4,123 @@ import autoTable from 'jspdf-autotable'
 export function generatePDF(record, statusOptions) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const status = statusOptions.find(s => s.value === record.status)
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text('MediLog', 20, 22)
-  doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 114, 104)
-  doc.text('Medical Visit Record', 20, 30)
-  doc.setDrawColor(216, 208, 196); doc.line(20, 34, 190, 34)
-  const basicRows = [['Visit Date', record.visitDate||'-'],['Hospital / Clinic', record.hospital||'-'],['Department', record.department||'-'],['Doctor', record.doctor||'-'],['Status', status?.label||'-'],['Next Visit', record.nextVisitDate||'-']]
-  autoTable(doc, { startY: 38, head: [['Field','Details']], body: basicRows, theme: 'grid', headStyles: { fillColor: [184,92,56], textColor: 255, fontStyle: 'bold', fontSize: 10 }, bodyStyles: { fontSize: 10, textColor: [26,23,20] }, columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold', textColor: [107,99,90] } }, margin: { left: 20, right: 20 } })
-  const contentFields = [['Chief Complaint',record.chiefComplaint],['Diagnosis',record.diagnosis],['Treatment',record.treatment],['Medications',record.medications],['Lab / Exam Results',record.labResults],['Notes',record.notes]].filter(([,v])=>v)
-  if (contentFields.length > 0) { autoTable(doc, { startY: doc.lastAutoTable.finalY+8, head: [['Clinical Details','']], body: contentFields, theme: 'grid', headStyles: { fillColor: [107,143,113], textColor: 255, fontStyle: 'bold', fontSize: 10 }, bodyStyles: { fontSize: 10, textColor: [26,23,20] }, columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold', textColor: [107,99,90] } }, margin: { left: 20, right: 20 } }) }
+
+  // Header
+  doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(184, 92, 56)
+  doc.text('MediLog', 20, 22)
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 114, 104)
+  doc.text('\u8a3a\u7642\u65e5\u8a8c  Medical Visit Record', 20, 29)
+  doc.setDrawColor(216, 208, 196); doc.line(20, 33, 190, 33)
+
+  // 基本資訊
+  const basicRows = [
+    ['\u5c31\u8a3a\u65e5\u671f', record.visitDate || '-'],
+    ['\u91ab\u9662 / \u8a3a\u6240', record.hospital || '-'],
+    ['\u79d1\u5225', record.department || '-'],
+    ['\u91ab\u5e2b', record.doctor || '-'],
+    ['\u72c0\u614b', status?.label || '-'],
+    ['\u4e0b\u6b21\u56de\u8a3a', record.nextVisitDate || '-'],
+  ]
+  autoTable(doc, {
+    startY: 37,
+    head: [['\u57fa\u672c\u8cc7\u8a0a', '']],
+    body: basicRows,
+    theme: 'grid',
+    headStyles: { fillColor: [184, 92, 56], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+    bodyStyles: { fontSize: 10, textColor: [26, 23, 20] },
+    columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold', textColor: [107, 99, 90] } },
+    margin: { left: 20, right: 20 },
+  })
+
+  // 生命徵象
+  const vitalRows = []
+  if (record.bpSystolic || record.bpDiastolic)
+    vitalRows.push(['\u8840\u58d3', `${record.bpSystolic || '-'} / ${record.bpDiastolic || '-'} mmHg`])
+  if (record.bloodSugar) {
+    const typeMap = { fasting: '\u7a7a\u8179', postmeal: '\u98ef\u5f8c2hr', random: '\u96a8\u6a5f', hba1c: 'HbA1c' }
+    vitalRows.push(['\u8840\u7cd6', `${record.bloodSugar} mg/dL (${typeMap[record.bloodSugarType] || record.bloodSugarType})`])
+  }
+  if (record.weight) vitalRows.push(['\u9ad4\u91cd', `${record.weight} kg`])
+  if (record.height) vitalRows.push(['\u8eab\u9ad8', `${record.height} cm`])
+  if (record.bmi) vitalRows.push(['BMI', record.bmi])
+
+  if (vitalRows.length > 0) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['\u751f\u547d\u5fb5\u8c61', '']],
+      body: vitalRows,
+      theme: 'grid',
+      headStyles: { fillColor: [91, 141, 184], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+      bodyStyles: { fontSize: 10, textColor: [26, 23, 20] },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold', textColor: [107, 99, 90] } },
+      margin: { left: 20, right: 20 },
+    })
+  }
+
+  // 抽血報告
+  const labRows = []
+  const cbc = []
+  if (record.wbc) cbc.push(`WBC: ${record.wbc}`)
+  if (record.rbc) cbc.push(`RBC: ${record.rbc}`)
+  if (record.hgb) cbc.push(`Hgb: ${record.hgb}`)
+  if (record.plt) cbc.push(`PLT: ${record.plt}`)
+  if (cbc.length) labRows.push(['CBC', cbc.join('  |  ')])
+
+  const renal = []
+  if (record.creatinine) renal.push(`Cr: ${record.creatinine}`)
+  if (record.bun) renal.push(`BUN: ${record.bun}`)
+  if (record.sodium) renal.push(`Na: ${record.sodium}`)
+  if (record.potassium) renal.push(`K: ${record.potassium}`)
+  if (renal.length) labRows.push(['\u814e\u529f\u80fd', renal.join('  |  ')])
+
+  const liver = []
+  if (record.ast) liver.push(`AST: ${record.ast}`)
+  if (record.alt) liver.push(`ALT: ${record.alt}`)
+  if (record.glucose) liver.push(`Glucose: ${record.glucose}`)
+  if (liver.length) labRows.push(['\u809d\u529f\u80fd/\u8840\u7cd6', liver.join('  |  ')])
+
+  if (record.labOther) labRows.push(['\u5176\u4ed6', record.labOther])
+
+  if (labRows.length > 0) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['\u62bd\u8840\u5831\u544a', '']],
+      body: labRows,
+      theme: 'grid',
+      headStyles: { fillColor: [107, 143, 113], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+      bodyStyles: { fontSize: 10, textColor: [26, 23, 20] },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold', textColor: [107, 99, 90] } },
+      margin: { left: 20, right: 20 },
+    })
+  }
+
+  // 就診內容
+  const clinicalFields = [
+    ['\u4e3b\u8a34', record.chiefComplaint],
+    ['\u8a3a\u65b7', record.diagnosis],
+    ['\u8655\u7f6e / \u6cbb\u7642', record.treatment],
+    ['\u7528\u85e5', record.medications],
+    ['\u5f71\u50cf / \u5176\u4ed6\u6aa2\u67e5', record.labResults],
+    ['\u5099\u8a3b', record.notes],
+  ].filter(([, v]) => v)
+
+  if (clinicalFields.length > 0) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['\u5c31\u8a3a\u5167\u5bb9', '']],
+      body: clinicalFields,
+      theme: 'grid',
+      headStyles: { fillColor: [201, 168, 76], textColor: 255, fontStyle: 'bold', fontSize: 10 },
+      bodyStyles: { fontSize: 10, textColor: [26, 23, 20] },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold', textColor: [107, 99, 90] } },
+      margin: { left: 20, right: 20 },
+    })
+  }
+
+  // Footer
   const pageHeight = doc.internal.pageSize.height
-  doc.setFontSize(9); doc.setTextColor(150)
-  doc.text(`Generated by MediLog · ${new Date().toLocaleDateString('zh-TW')}`, 20, pageHeight - 12)
-  doc.save(`MediLog_${record.hospital}_${record.visitDate}.pdf`.replace(/\s/g,'_'))
+  doc.setFontSize(9); doc.setTextColor(180)
+  doc.text(`Generated by MediLog  ·  ${new Date().toLocaleDateString('zh-TW')}`, 20, pageHeight - 10)
+
+  doc.save(`MediLog_${record.hospital}_${record.visitDate}.pdf`.replace(/\s/g, '_'))
 }
